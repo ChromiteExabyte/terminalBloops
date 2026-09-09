@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TerminalBloops.App/TerminalBloops.App.csproj" />
+    <Project Path="src/TerminalBloops.Core/TerminalBloops.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TerminalBloops.Tests/TerminalBloops.Tests.csproj" />
+  </Folder>
+</Solution>
