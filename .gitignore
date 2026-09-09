@@ -5,3 +5,41 @@ artifacts/
 .vs/
 *.user
 TestResults/
+
+# Runtime databases, SQLite sidecars, and exported Windows event logs.
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.evtx
+
+# Exported recorder state and diagnostics can contain local identities or paths.
+setup-result.json
+remove-result.json
+recorder-diagnostics.json
+capture-checks.json
+window-capture.json
+capture-failure.txt
+window-failure.txt
+last-setup-native-error.txt*
+last-removal-native-error.txt*
+
+# Deliberate fixture data may use the same extensions or names as runtime exports.
+!tests/**/fixtures/**
+!tests/**/Fixtures/**
+
+# Local environment secrets; keep deliberate example files publishable.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# UI screenshots in docs/images and source fixtures are intentionally not ignored.

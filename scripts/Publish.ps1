@@ -15,6 +15,17 @@ try {
     foreach ($name in @('Setup-Recorder.ps1', 'Remove-Recorder.ps1', 'Diagnose-Recorder.ps1', 'Recorder.Common.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $scriptDirectory $name) -Force
     }
-    Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination (Join-Path $outputDirectory 'README.md') -Force
+    foreach ($name in @('README.md', 'VALIDATION.md')) {
+        Copy-Item -LiteralPath (Join-Path $root $name) -Destination (Join-Path $outputDirectory $name) -Force
+    }
+    # Keep documentation and screenshots together so relative links work after extraction.
+    $sourceDocs = Join-Path $root 'docs'
+    $publishedDocs = Join-Path $outputDirectory 'docs'
+    if (Test-Path -LiteralPath $sourceDocs -PathType Container) {
+        $null = New-Item -ItemType Directory -Path $publishedDocs -Force
+        foreach ($item in Get-ChildItem -LiteralPath $sourceDocs -Force) {
+            Copy-Item -LiteralPath $item.FullName -Destination $publishedDocs -Recurse -Force
+        }
+    }
     Write-Output ('Published self-contained Windows x64 app: ' + (Join-Path $outputDirectory 'TerminalBloops.exe'))
 } finally { Pop-Location }

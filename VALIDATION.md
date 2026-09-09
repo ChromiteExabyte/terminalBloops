@@ -6,7 +6,13 @@ Windows PowerShell 5.1 helper tests cover ACL preservation, install ownership, a
 
 The self-contained application's UI smoke check verifies that it has no console window, cards do not activate or steal foreground focus, notification bursts produce at most three cards plus an overflow counter, and cards expire after six seconds. It also checks that event details and drawers start collapsed, only one event opens at a time, closing a row clears selection, programmatic event selection opens its details, filters still update the view model, and search/settings drawers open individually. Rendered checks cover light, dark, high-contrast, compact, collapsed, expanded, search, settings and empty views, plus each notification theme and the overflow card. The minimal Frutiger Aero redesign was reviewed at 860 × 660 and the 660 × 500 minimum size. Text selection uses paired theme colors, interactive controls have distinct outlines, and high contrast uses corresponding Windows foreground/background colors.
 
-To reproduce:
+## Continuous integration
+
+The [Windows build workflow](https://github.com/ChromiteExabyte/terminalBloops/actions/workflows/windows.yml) runs the Release build, 70 automated tests, Windows PowerShell recorder-helper checks, and self-contained Windows x64 publish on a clean GitHub-hosted Windows runner. Successful runs upload a `TerminalBloops-win-x64` development package for 14 days, including the recorder helpers and documentation. The workflow has read-only repository permissions and uses pinned action revisions.
+
+CI does not install Sysmon, exercise live event capture, or run interactive UI focus checks. Those checks require a configured interactive Windows desktop and remain separate. The package is unsigned and is not presented as a stable release.
+
+## Reproduce locally
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1

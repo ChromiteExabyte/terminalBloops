@@ -1,0 +1,53 @@
+name: Windows build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test, and package
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: ga
+
+      # These checks use temporary fixtures and do not install or configure Sysmon.
+      # UI focus and live recorder checks require an interactive Windows desktop;
+      # they remain explicit local checks described in VALIDATION.md.
+      - name: Build WPF app and run unit and recorder helper tests
+        run: .\scripts\Build.ps1 -Configuration Release
+
+      - name: Publish self-contained Windows x64 app
+        run: .\scripts\Publish.ps1 -Configuration Release
+
+      - name: Upload Windows x64 package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: TerminalBloops-win-x64
+          path: artifacts/publish/
+          if-no-files-found: error
+          retention-days: 14
