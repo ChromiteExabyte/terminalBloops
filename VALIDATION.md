@@ -1,6 +1,6 @@
 # Verification
 
-The .NET 10 Windows build and 70 automated tests pass. Tests cover process duration boundaries (including submillisecond precision), transactional checkpoints, replay deduplication, out-of-order events, missing exits, PID reuse, exact window attribution, retention, parent chains, filtering, notification policy, Sysmon parsing, PE classification, producer health, and cleared-log checkpoint detection.
+The .NET 10 Windows build and 77 automated tests pass. Tests cover process duration boundaries (including submillisecond precision), transactional checkpoints, replay deduplication, out-of-order events, missing exits, PID reuse, exact window attribution, retention, parent chains, filtering, notification policy, Sysmon parsing, PE classification, producer health, and cleared-log checkpoint detection. Collector lifecycle tests substitute the Windows connection boundary to exercise restored permissions, repeated reconnection failures, unavailable producers, overlapping recovery requests, and cancellation after failed startup without changing machine settings.
 
 Windows PowerShell 5.1 helper tests cover ACL preservation, install ownership, atomic metadata writes, safe interrupted-install recovery, native-output encoding, and generated Sysmon filtering configuration. They do not change machine settings.
 
@@ -8,7 +8,7 @@ The self-contained application's UI smoke check verifies that it has no console 
 
 ## Continuous integration
 
-The [Windows build workflow](https://github.com/ChromiteExabyte/terminalBloops/actions/workflows/windows.yml) runs the Release build, 70 automated tests, Windows PowerShell recorder-helper checks, and self-contained Windows x64 publish on a clean GitHub-hosted Windows runner. Successful runs upload a `TerminalBloops-win-x64` development package for 14 days, including the recorder helpers and documentation. The workflow has read-only repository permissions and uses pinned action revisions.
+The [Windows build workflow](https://github.com/ChromiteExabyte/terminalBloops/actions/workflows/windows.yml) runs the Release build, automated test suite, Windows PowerShell recorder-helper checks, and self-contained Windows x64 publish on a clean GitHub-hosted Windows runner. Successful runs upload a `TerminalBloops-win-x64` development package for 14 days, including the recorder helpers and documentation. The workflow has read-only repository permissions and uses pinned action revisions.
 
 CI does not install Sysmon, exercise live event capture, or run interactive UI focus checks. Those checks require a configured interactive Windows desktop and remain separate. The package is unsigned and is not presented as a stable release.
 

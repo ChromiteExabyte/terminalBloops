@@ -24,6 +24,8 @@ The window observer uses Windows event hooks in the interactive user session. Wi
 
 Process state, source bookmarks and checkpoint fingerprints are stored transactionally. Replayed events are deduplicated, and replay does not generate historical notification cards. This allows the UI to restart and import the retained Sysmon history without turning an old burst into a new interruption.
 
+When disconnected, the collector checks the producer every 30 seconds and retries once its service is running and channel is enabled. Failed reconnections remain eligible for later retries; identical reconnection errors are reported once until the connection succeeds. Recovery imports up to seven days of available history quietly. Concurrent recovery requests are serialized, and shutdown cancels recovery even if the initial subscription failed. None of these checks starts, installs or reconfigures Sysmon.
+
 Bookmarks cannot recover overwritten event-log records. Capture notices expose missing permissions, unavailable producers, recording gaps and observer downtime. The local application store prunes history by age and size; Windows controls the separate rolling Sysmon log.
 
 ## A quiet desktop surface

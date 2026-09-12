@@ -18,6 +18,10 @@ public sealed class SysmonCollector : IDisposable
     private readonly object _lifecycle = new();
     private readonly object _callbackGate = new();
     private readonly SubscribeCallback _callback;
+    private readonly Action<string?> _subscribe;
+    private readonly Action _close;
+    private readonly Func<(bool? ServiceRunning, bool? ChannelEnabled)> _readHealth;
+    private volatile bool _connected;
     private nint _subscription;
     private nint _bookmark;
     private DateTimeOffset _startedUtc;
@@ -28,12 +32,29 @@ public sealed class SysmonCollector : IDisposable
     private System.Threading.Timer? _healthTimer;
     private int _checkingHealth;
     private string? _lastHealthMessage;
+    private string? _lastReconnectError;
 
     public event Action<CaptureEnvelope>? EventReceived;
     public event Action<CaptureNotice>? Notice;
     public string? ExpectedCheckpointFingerprint { get; set; }
 
-    public SysmonCollector() => _callback = OnNativeEvent;
+    public SysmonCollector()
+    {
+        _callback = OnNativeEvent;
+        _subscribe = Subscribe;
+        _close = CloseHandles;
+        _readHealth = () => (ReadServiceRunning(), ReadChannelEnabled());
+    }
+
+    // Substitute the Windows boundary so lifecycle failures can be exercised without
+    // installing, stopping or changing a machine's recorder.
+    internal SysmonCollector(Action<string?> subscribe, Action close,
+        Func<(bool? ServiceRunning, bool? ChannelEnabled)> readHealth) : this()
+    {
+        _subscribe = subscribe;
+        _close = close;
+        _readHealth = readHealth;
+    }
 
     public Task StartAsync(string? bookmarkXml, CancellationToken cancellationToken)
     {
@@ -44,6 +65,9 @@ public sealed class SysmonCollector : IDisposable
             if (_started) throw new InvalidOperationException("The recorder has already been started.");
             _started = true;
             _startedUtc = DateTimeOffset.UtcNow;
+            // Register even when the first subscription fails. Closing asynchronously
+            // lets other cancellation callbacks release blocked event consumers first.
+            _cancellationRegistration = cancellationToken.Register(() => { _ = Task.Run(Dispose); });
         }
         return Task.Run(() =>
         {
@@ -53,7 +77,7 @@ public sealed class SysmonCollector : IDisposable
                 lock (_lifecycle)
                 {
                     if (_disposed) return;
-                    Subscribe(bookmarkXml);
+                    Connect(bookmarkXml);
                 }
             }
             finally
@@ -61,15 +85,24 @@ public sealed class SysmonCollector : IDisposable
                 lock (_lifecycle)
                 {
                     if (!_disposed)
-                        _healthTimer = new System.Threading.Timer(_ => CheckProducerHealth(), null,
+                        _healthTimer = new System.Threading.Timer(_ => { _ = CheckProducerHealthAsync(); }, null,
                             TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
                 }
-                CheckProducerHealth();
+                _ = CheckProducerHealthAsync(reconnect: false);
             }
-            // EvtClose waits for active native callbacks. Do not run it inside cancellation's
-            // synchronous callback dispatch: other token callbacks may release a blocked consumer.
-            _cancellationRegistration = cancellationToken.Register(() => { _ = Task.Run(Dispose); });
         }, cancellationToken);
+    }
+
+    private void Connect(string? bookmarkXml)
+    {
+        _subscribe(bookmarkXml);
+        _connected = true;
+    }
+
+    private void CloseConnection()
+    {
+        _connected = false;
+        _close();
     }
 
     private void Subscribe(string? bookmarkXml)
@@ -115,19 +148,22 @@ public sealed class SysmonCollector : IDisposable
                 2 or 15007 => "Sysmon is not available. Complete recorder setup to capture launch commands and process history.",
                 _ => $"The Sysmon recorder could not start: {new Win32Exception(error).Message} (Windows error {error})."
             };
-            Report("recorder-unavailable", message);
             throw new Win32Exception(error, message);
         }
         Report("recorder-connected", "The Sysmon history subscription is connected. Existing history is being restored quietly.");
     }
 
-    private void CheckProducerHealth()
+    internal async Task CheckProducerHealthAsync(bool reconnect = true)
     {
         if (_disposed || Interlocked.CompareExchange(ref _checkingHealth, 1, 0) != 0) return;
         try
         {
-            var (kind, message) = EvaluateProducerHealth(ReadServiceRunning(), ReadChannelEnabled(),
-                Volatile.Read(ref _subscription) != 0);
+            var health = _readHealth();
+            // Retry on the normal 30-second health cadence, including after an initial
+            // permission failure or a failed reconnection. Never install or start Sysmon.
+            if (reconnect && !_connected && health.ServiceRunning == true && health.ChannelEnabled == true)
+                await ReconnectAsync().ConfigureAwait(false);
+            var (kind, message) = EvaluateProducerHealth(health.ServiceRunning, health.ChannelEnabled, _connected);
             var key = kind + ":" + message;
             if (!_disposed && !string.Equals(_lastHealthMessage, key, StringComparison.Ordinal))
             {
@@ -239,7 +275,7 @@ public sealed class SysmonCollector : IDisposable
             {
                 var error = unchecked((int)nativeEvent);
                 Report("recording-gap", $"Windows reported missing or unavailable event-log records (error {error}). Available history will be reconnected.");
-                ScheduleRecovery();
+                _ = ReconnectAsync();
                 return 0;
             }
 
@@ -261,10 +297,10 @@ public sealed class SysmonCollector : IDisposable
         return 0;
     }
 
-    private void ScheduleRecovery()
+    internal Task ReconnectAsync()
     {
-        if (Interlocked.CompareExchange(ref _recovering, 1, 0) != 0) return;
-        _ = Task.Run(() =>
+        if (Interlocked.CompareExchange(ref _recovering, 1, 0) != 0) return Task.CompletedTask;
+        return Task.Run(() =>
         {
             try
             {
@@ -272,13 +308,22 @@ public sealed class SysmonCollector : IDisposable
                 {
                     if (_disposed) return;
                     // Closing off the callback thread avoids waiting for the callback itself.
-                    CloseHandles();
+                    CloseConnection();
                     _startedUtc = DateTimeOffset.UtcNow;
-                    Subscribe(null);
+                    Connect(null);
+                    _lastReconnectError = null;
                 }
-                CheckProducerHealth();
+                _ = CheckProducerHealthAsync(reconnect: false);
             }
-            catch (Exception ex) { Report("recorder-unavailable", $"Recorder reconnection failed: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                var message = $"Recorder reconnection failed: {ex.Message}";
+                if (_lastReconnectError != message)
+                {
+                    _lastReconnectError = message;
+                    Report("recorder-unavailable", message);
+                }
+            }
             finally { Interlocked.Exchange(ref _recovering, 0); }
         });
     }
@@ -318,7 +363,7 @@ public sealed class SysmonCollector : IDisposable
             if (_disposed) return;
             _disposed = true;
             _healthTimer?.Dispose();
-            CloseHandles();
+            CloseConnection();
         }
         _cancellationRegistration.Unregister();
         GC.KeepAlive(_callback);

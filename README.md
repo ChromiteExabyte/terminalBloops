@@ -92,7 +92,7 @@ History stays on the machine, with no telemetry or application network API. **In
 
 ## Verification
 
-- **70 automated tests:** durations, PID reuse, out-of-order events, replay, ancestry, window evidence, retention, classification and notification policy.
+- **77 automated tests:** durations, PID reuse, out-of-order events, replay, ancestry, window evidence, retention, classification, notification policy and recorder reconnection.
 - **Windows PowerShell helper checks:** recorder rules, permission preservation and interrupted-install recovery without changing machine settings.
 - **Interactive UI smoke checks:** progressive disclosure, filtering, card focus behavior, burst limits and expiration, plus light/dark/high-contrast renders.
 
